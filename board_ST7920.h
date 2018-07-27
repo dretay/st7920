@@ -3,8 +3,15 @@
 #include "gfx.h"
 #include "main.h"
 #include "stdbool.h"
+
+#if defined(STM32F102x6) || defined(STM32F102xB) || defined(STM32F103x6) || defined(STM32F103xB) || defined(STM32F103xG) || defined(STM32F103xE)
 #include <stm32f1xx_hal.h>
+#else
+#include "stm32f0xx_hal.h"
+#endif
+
 #include "string.h"
+#include "dwt_stm32_delay.h"
 
 // LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
 const uint8_t LcdDisplayClear = 0x01;
@@ -40,14 +47,8 @@ uint8_t image[(128 * 64) / 8];
 extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim3;
 
-//this is super ghetto and basically the count has to be tweaked 
-//per spi prescaler / fsb combo 
-void delay_2us() {	
-	uint8_t i = 0;
-	for (; i < 120; i++)
-	{
-		asm("nop");		
-	}
+void delay_us() {	
+	DWT_Delay_us(72);
 }
 
 static void enable(void) {
@@ -62,12 +63,12 @@ static void reset_display(void) {
 	HAL_Delay(5);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); 
 	HAL_Delay(50);
+	
 }
 void sendLcd(uint8_t data1, uint8_t data2) {
 	uint8_t data[] = { data1, (data2 & 0xF0), (data2 << 4 ) };
 	HAL_SPI_Transmit(&hspi1, data, 3, 1);
-	while (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY) {
-		LOG("BUSY!");
+	while (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY) {		
 	};
 	
 }
@@ -82,7 +83,7 @@ void setGraphicsAddress(unsigned int r, unsigned int c) {
 	sendLcdCommand(LcdSetGdramAddress | (r & 31));
 	//commandDelay();  // don't seem to need this one
 	sendLcdCommand(LcdSetGdramAddress | c | ((r & 32) >> 2));
-	delay_2us();    // we definitely need this one
+	delay_us();    // we definitely need this one
 }
 
 void flush() {
@@ -103,7 +104,7 @@ void flush() {
 			for (col = startColNum; col < endColNum; ++col) {      				
 				sendLcdData(*ptr++);
 				sendLcdData(*ptr++);
-				delay_2us();				
+				delay_us();				
 			}
 			__enable_irq();
 		}
@@ -153,17 +154,17 @@ static GFXINLINE void init_board(GDisplay* g) {
 	enable();
 		
 	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	delay_2us();
+	delay_us();
 	sendLcdCommand(LcdFunctionSetBasicAlpha);
-	delay_2us();
+	delay_us();
 	sendLcdCommand(LcdEntryModeSet);
-	delay_2us();
+	delay_us();
 	
 	sendLcdCommand(LcdFunctionSetExtendedGraphic);
 	clear();
 	
 	sendLcdCommand(LcdDisplayOn);
-	delay_2us();
+	delay_us();
 
 	disable();
 	
